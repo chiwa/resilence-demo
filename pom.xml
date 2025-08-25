@@ -3,7 +3,6 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <!-- ใช้ Spring Boot parent ให้จัดเวอร์ชัน libs ให้ -->
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
@@ -11,7 +10,6 @@
     <relativePath/>
   </parent>
 
-  <!-- แก้ชื่อให้สะกดถูกและสื่อความ -->
   <groupId>com.zengcode</groupId>
   <artifactId>resilience4j-demo</artifactId>
   <version>0.0.1-SNAPSHOT</version>
@@ -20,25 +18,19 @@
 
   <properties>
     <java.version>21</java.version>
-    <!-- ใช้ Resilience4j ตรง ๆ (ไม่ผ่าน Spring Cloud CircuitBreaker) -->
     <resilience4j.version>2.2.0</resilience4j.version>
   </properties>
 
   <dependencies>
-    <!-- Web MVC + Jackson -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
     </dependency>
-
-    <!-- Resilience4j integration with Spring Boot 3 (สำหรับ @CircuitBreaker/@Retry/@TimeLimiter ฯลฯ) -->
     <dependency>
       <groupId>io.github.resilience4j</groupId>
       <artifactId>resilience4j-spring-boot3</artifactId>
       <version>${resilience4j.version}</version>
     </dependency>
-
-    <!-- Actuator + Prometheus registry -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>

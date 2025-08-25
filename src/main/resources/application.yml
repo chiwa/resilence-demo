@@ -12,3 +12,7 @@ management:
   endpoint:
     health:
       show-details: always
+
+logging:
+  level:
+    io.github.resilience4j: DEBUG
