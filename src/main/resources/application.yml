@@ -16,3 +16,6 @@ management:
 logging:
   level:
     io.github.resilience4j: DEBUG
+    io.github.resilience4j.spring6: DEBUG
+    io.github.resilience4j.bulkhead: DEBUG
+    io.github.resilience4j.ratelimiter: DEBUG

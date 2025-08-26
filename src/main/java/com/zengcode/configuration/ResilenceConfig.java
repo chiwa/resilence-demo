@@ -13,10 +13,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
+import io.github.resilience4j.bulkhead.*;
+import io.github.resilience4j.ratelimiter.*;
+import org.springframework.context.annotation.Primary;
 
-import java.io.IOException;
 import java.time.Duration;
 
 @Configuration
@@ -24,12 +24,13 @@ public class ResilenceConfig {
 
     private static final Logger log = LoggerFactory.getLogger(ResilenceConfig.class);
 
+    // ---- CircuitBreaker & Retry (เหมือนเดิม)
     @Bean
-    public CircuitBreakerConfigCustomizer downstreamACustomizer() {
-        return CircuitBreakerConfigCustomizer.of("downstreamA", builder -> builder
+    public CircuitBreakerConfigCustomizer downstreamACircuitBreaker() {
+        return CircuitBreakerConfigCustomizer.of("downstreamA", b -> b
                 .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
                 .slidingWindowSize(10)
-                .minimumNumberOfCalls(10)   // <<< จุดชี้เป็นชี้ตายของเทสต์
+                .minimumNumberOfCalls(10)
                 .failureRateThreshold(50f)
                 .waitDurationInOpenState(Duration.ofSeconds(5))
                 .permittedNumberOfCallsInHalfOpenState(3)
@@ -37,29 +38,51 @@ public class ResilenceConfig {
         );
     }
 
-    // ---------------- Retry
     @Bean
     public RetryConfigCustomizer downstreamARetryCustomizer() {
-        return RetryConfigCustomizer.of("downstreamA", builder -> builder
-                // max-attempts: 3 (รวมครั้งแรก)
+        return RetryConfigCustomizer.of("downstreamA", b -> b
                 .maxAttempts(3)
-                // wait-duration + exponential backoff + randomized (jitter)
-                // base = 200ms, multiplier = 2x → 200ms, 400ms, ...
                 .waitDuration(Duration.ofMillis(200))
-                .intervalFunction(IntervalFunction.ofExponentialRandomBackoff(
-                        200L,      // initial interval millis
-                        2.0d       // multiplier
-                ))
-                // รีทรายเฉพาะ error ชั่วคราวที่ “ควรลองใหม่”
-                .retryExceptions(
-                        IOException.class,                 // network
-                        HttpServerErrorException.class     // 5xx จาก RestClient
+                .intervalFunction(IntervalFunction.ofExponentialRandomBackoff(200L, 2.0d))
+                // Retry เฉพาะ IO และ 5xx เท่านั้น
+                .retryOnException(ex ->
+                        ex instanceof java.io.IOException ||
+                                ex instanceof org.springframework.web.client.HttpServerErrorException
                 )
-                // ไม่รีทราย 4xx (ผิดฝั่ง client)
-                .ignoreExceptions(HttpClientErrorException.class)
+                .failAfterMaxAttempts(true)
         );
     }
 
+    // ---- พรี-สร้าง BulkheadRegistry พร้อม instance "downstreamA"
+    @Bean
+    @Primary
+    public BulkheadRegistry bulkheadRegistry() {
+        var cfg = BulkheadConfig.custom()
+                .maxConcurrentCalls(2)
+                .maxWaitDuration(Duration.ZERO)
+                .build();
+
+        var registry = BulkheadRegistry.ofDefaults();
+        registry.bulkhead("downstreamA", cfg);
+        return registry;
+    }
+
+    // ---- พรี-สร้าง RateLimiterRegistry พร้อม instance "downstreamA"
+    @Bean
+    @Primary
+    public RateLimiterRegistry rateLimiterRegistry() {
+        var cfg = RateLimiterConfig.custom()
+                .limitForPeriod(2)
+                .limitRefreshPeriod(Duration.ofSeconds(1))
+                .timeoutDuration(Duration.ZERO)
+                .build();
+
+        var registry = RateLimiterRegistry.ofDefaults();
+        registry.rateLimiter("downstreamA", cfg);
+        return registry;
+    }
+
+    // ---- Logs (optional)
     @Bean
     public RegistryEventConsumer<CircuitBreaker> cbEventLogger() {
         return new RegistryEventConsumer<>() {
